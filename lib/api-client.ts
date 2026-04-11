@@ -78,6 +78,17 @@ class ApiClient {
     }
   }
 
+  setToken(token: string) {
+    this.token = token;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('auth_token', token);
+    }
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.token;
+  }
+
   async getCurrentUser() {
     const { data } = await this.client.get('/auth/me');
     return data;
@@ -106,8 +117,67 @@ class ApiClient {
   // Jobs
   // ==========================================================================
 
+  async listJobs() {
+    const { data } = await this.client.get('/jobs/');
+    return data;
+  }
+
   async getJobStatus(jobId: string) {
     const { data } = await this.client.get(`/jobs/${jobId}`);
+    return data;
+  }
+
+  getJobLogsUrl(jobId: string): string {
+    return `${API_BASE_URL}/jobs/${jobId}/logs`;
+  }
+
+  // ==========================================================================
+  // Clients
+  // ==========================================================================
+
+  async listClients() {
+    const { data } = await this.client.get('/clients/');
+    return data;
+  }
+
+  async getClient(slug: string) {
+    const { data } = await this.client.get(`/clients/${slug}`);
+    return data;
+  }
+
+  async listClientOutputs(slug: string) {
+    const { data } = await this.client.get(`/clients/${slug}/outputs`);
+    return data;
+  }
+
+  // ==========================================================================
+  // Requests (nueva petición)
+  // ==========================================================================
+
+  async createRequest(texto: string, cliente: string, contextoAdicional?: string) {
+    const { data } = await this.client.post('/requests/', {
+      texto,
+      cliente,
+      contexto_adicional: contextoAdicional,
+    });
+    return data;
+  }
+
+  async getRequestStatus(requestId: string) {
+    const { data } = await this.client.get(`/requests/${requestId}`);
+    return data;
+  }
+
+  async submitAclaracion(requestId: string, respuestas: Record<string, string>) {
+    const { data } = await this.client.post(`/requests/${requestId}/aclarar`, {
+      request_id: requestId,
+      respuestas,
+    });
+    return data;
+  }
+
+  async executeRequest(requestId: string) {
+    const { data } = await this.client.post(`/requests/${requestId}/ejecutar`, {});
     return data;
   }
 
