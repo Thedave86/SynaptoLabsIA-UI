@@ -11,7 +11,7 @@ import { Button, Input, Label, Alert } from '@/components/ui';
 
 const loginSchema = z.object({
   username: z.string().min(2, 'El usuario es obligatorio'),
-  password: z.string().min(3, 'La contraseña es obligatoria'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -113,16 +113,18 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Hint para demo */}
-          <div className="mt-4 rounded-lg bg-gray-50 p-3">
-            <p className="text-xs font-medium text-gray-600 mb-1">Credenciales de prueba:</p>
-            <p className="text-xs text-gray-500">
-              <code className="font-mono">admin</code> / <code className="font-mono">admin</code> — Administrador
-            </p>
-            <p className="text-xs text-gray-500">
-              <code className="font-mono">demo</code> / <code className="font-mono">demo</code> — Visor
-            </p>
-          </div>
+          {/* Hint para demo — solo en entorno de desarrollo */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3">
+              <p className="text-xs font-semibold text-amber-700 mb-1">⚠ Dev only — no visible en producción</p>
+              <p className="text-xs text-amber-600">
+                <code className="font-mono">admin</code> / <code className="font-mono">admin</code> — Administrador
+              </p>
+              <p className="text-xs text-amber-600">
+                <code className="font-mono">demo</code> / <code className="font-mono">demo</code> — Visor
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -10,29 +10,17 @@ import {
   Badge, Button, Spinner, Alert
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
-
-const statusVariant: Record<string, any> = {
-  activo: 'success',
-  en_progreso: 'warning',
-  completado: 'info',
-  requiere_accion: 'danger',
-};
-
-const statusLabel: Record<string, string> = {
-  activo: 'Activo',
-  en_progreso: 'En progreso',
-  completado: 'Completado',
-  requiere_accion: 'Requiere acción',
-};
+import type { Client, ClientsResponse } from '@/lib/types';
+import { CLIENT_STATUS_MAP } from '@/lib/types';
 
 export default function ProjectsPage() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery<ClientsResponse>({
     queryKey: ['clients'],
-    queryFn: () => apiClient.listClients(),
+    queryFn: () => apiClient.listClients() as Promise<ClientsResponse>,
     refetchInterval: 30_000,
   });
 
-  const clients = data?.clients || [];
+  const clients: Client[] = data?.clients ?? [];
 
   return (
     <AppShell title="Proyectos">
@@ -77,7 +65,7 @@ export default function ProjectsPage() {
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {clients.map((client: any) => (
+          {clients.map((client: Client) => (
             <Card key={client.slug} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -85,8 +73,8 @@ export default function ProjectsPage() {
                     <CardTitle className="text-base">{client.nombre}</CardTitle>
                     <CardDescription className="capitalize">{client.tipo}</CardDescription>
                   </div>
-                  <Badge variant={statusVariant[client.estado] || 'default'}>
-                    {statusLabel[client.estado] || client.estado}
+                  <Badge variant={CLIENT_STATUS_MAP[client.estado]?.variant ?? 'default'}>
+                    {CLIENT_STATUS_MAP[client.estado]?.label ?? client.estado}
                   </Badge>
                 </div>
               </CardHeader>

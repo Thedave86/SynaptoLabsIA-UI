@@ -12,17 +12,18 @@ import {
   Badge, Button, Spinner, Alert, Progress
 } from '@/components/ui';
 import { formatPercent, formatDuration } from '@/lib/utils';
+import type { MetricsOverview, CrewStats } from '@/lib/types';
 
 export default function AdminDebugPage() {
-  const { data: metrics, isLoading, error, refetch, isFetching } = useQuery({
+  const { data: metrics, isLoading, error, refetch, isFetching } = useQuery<MetricsOverview>({
     queryKey: ['metrics', 'overview'],
-    queryFn: () => apiClient.getMetricsOverview(168),
+    queryFn: () => apiClient.getMetricsOverview(168) as Promise<MetricsOverview>,
     refetchInterval: 30_000,
   });
 
   // Datos para gráfico de crews
   const crewChartData = metrics?.crews
-    ? Object.entries(metrics.crews).map(([name, stats]: [string, any]) => ({
+    ? Object.entries(metrics.crews).map(([name, stats]: [string, CrewStats]) => ({
         name,
         ejecuciones: stats.ejecuciones || 0,
         exito: stats.exito_pct || 0,
@@ -167,7 +168,7 @@ export default function AdminDebugPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {Object.entries(metrics.crews).map(([name, stats]: [string, any]) => (
+                        {Object.entries(metrics.crews).map(([name, stats]: [string, CrewStats]) => (
                           <tr key={name} className="hover:bg-gray-50">
                             <td className="py-3 font-medium text-gray-900">{name}</td>
                             <td className="py-3 text-right text-gray-600">{stats.ejecuciones}</td>

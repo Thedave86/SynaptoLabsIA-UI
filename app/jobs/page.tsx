@@ -1,31 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, RefreshCw } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { useJobs } from '@/hooks/useJobs';
+import { useJobsStream } from '@/hooks/useJobsStream';
 import AppShell from '@/components/layout/AppShell';
 import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription,
-  Badge, Button, Progress, Spinner, Alert
+  Card, CardContent,
+  Badge, Button, Spinner, Alert
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
-
-const statusMap: Record<string, { label: string; variant: any }> = {
-  running: { label: 'En ejecución', variant: 'warning' },
-  completed: { label: 'Completado', variant: 'success' },
-  failed: { label: 'Fallido', variant: 'danger' },
-  queued: { label: 'En cola', variant: 'info' },
-};
+import type { Job } from '@/lib/types';
+import { JOB_STATUS_MAP } from '@/lib/types';
 
 export default function JobsPage() {
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['jobs'],
-    queryFn: () => apiClient.listJobs(),
-    refetchInterval: 10_000,
-  });
+  // Stream SSE para actualizaciones en tiempo real
+  useJobsStream();
 
-  const jobs = data?.jobs || [];
+  const { data, isLoading, error, refetch, isFetching } = useJobs();
+  const jobs: Job[] = data?.jobs ?? [];
+
+  const statusMap = JOB_STATUS_MAP;
 
   return (
     <AppShell title="Trabajos">
@@ -70,24 +65,37 @@ export default function JobsPage() {
         )}
 
         <div className="space-y-3">
-          {jobs.map((job: any) => {
-            const sm = statusMap[job.status] || { label: job.status, variant: 'default' };
+          {jobs.map((job: Job) => {
+            const sm = statusMap[job.status] ?? { label: job.status, variant: 'default' };
             return (
               <Card key={job.job_id} className="hover:shadow-md transition-shadow">
                 <CardContent className="flex items-center gap-4 pt-5 pb-5">
-                  {/* Progress visual */}
+                  {/* Progress visual con ARIA */}
                   <div className="flex-shrink-0">
                     <div
-                      className="relative flex h-12 w-12 items-center justify-center rounded-full"
-                      style={{
-                        background: `conic-gradient(#6366f1 ${(job.progress || 0) * 100}%, #e5e7eb ${(job.progress || 0) * 100}%)`,
-                      }}
+                      role="progressbar"
+                      aria-valuenow={Math.round((job.progress || 0) * 100)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`Progreso: ${Math.round((job.progress || 0) * 100)}%`}
+                      className="relative flex h-12 w-12 items-center justify-center"
                     >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
-                        <span className="text-xs font-bold text-indigo-700">
-                          {Math.round((job.progress || 0) * 100)}%
-                        </span>
-                      </div>
+                      <svg className="h-12 w-12 -rotate-90" viewBox="0 0 48 48" aria-hidden="true">
+                        <circle cx="24" cy="24" r="20" fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                        <circle
+                          cx="24"
+                          cy="24"
+                          r="20"
+                          fill="none"
+                          stroke="#6366f1"
+                          strokeWidth="4"
+                          strokeDasharray={`${(job.progress || 0) * 125.66} 125.66`}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <span className="absolute text-xs font-bold text-indigo-700">
+                        {Math.round((job.progress || 0) * 100)}%
+                      </span>
                     </div>
                   </div>
 

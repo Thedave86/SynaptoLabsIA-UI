@@ -48,3 +48,9 @@ Thumbs.db
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Playwright E2E
+/playwright/.auth/
+/playwright-report/
+/test-results/
+/blob-report/

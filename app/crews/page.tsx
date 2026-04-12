@@ -10,14 +10,16 @@ import {
   Badge, Button, Spinner, Alert
 } from '@/components/ui';
 import { formatPercent, formatDuration } from '@/lib/utils';
+import type { Crew, CrewsResponse } from '@/lib/types';
 
 export default function CrewsPage() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery<CrewsResponse>({
     queryKey: ['crews'],
-    queryFn: () => apiClient.listCrews(),
+    queryFn: () => apiClient.listCrews() as Promise<CrewsResponse>,
   });
 
-  const crews: any[] = Array.isArray(data) ? data : data?.crews || [];
+  // Forma canónica: { crews: Crew[] } — el ApiClient siempre devuelve este shape
+  const crews: Crew[] = data?.crews ?? [];
 
   return (
     <AppShell title="Servicios">
@@ -42,7 +44,7 @@ export default function CrewsPage() {
         )}
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {crews.map((crew: any) => (
+          {crews.map((crew: Crew) => (
             <Card key={crew.name} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -83,11 +85,12 @@ export default function CrewsPage() {
                 </div>
 
                 {/* Agentes */}
-                {crew.agents && crew.agents.length > 0 && (
+                {Array.isArray((crew as Crew & { agents?: string[] }).agents) &&
+                  (crew as Crew & { agents?: string[] }).agents!.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs text-gray-500 mb-1.5">Agentes</p>
                     <div className="flex flex-wrap gap-1">
-                      {crew.agents.map((agent: string) => (
+                      {(crew as Crew & { agents?: string[] }).agents!.map((agent: string) => (
                         <Badge key={agent} variant="outline" className="text-xs">
                           {agent}
                         </Badge>

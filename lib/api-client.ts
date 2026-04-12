@@ -1,97 +1,79 @@
 /**
  * lib/api-client.ts
- * Cliente HTTP para SynaptoLabsIA API
- * 
- * Autor: GitHub Copilot (Claude Sonnet 4.5)
- * Fecha: 2026-04-10
+ * Cliente HTTP para SynaptoLabsIA API — Arquitectura BFF
+ *
+ * SEGURIDAD: El token JWT vive exclusivamente en una cookie httpOnly
+ * gestionada por las API Routes de Next.js (/api/auth/*).
+ * Ningún token circula por el JavaScript del navegador.
+ *
+ * Todas las llamadas al Core API se enrutan a través del proxy BFF:
+ *   /api/proxy/* → Core API (con Bearer inyectado server-side)
+ *
+ * Autor: GitHub Copilot (Claude Sonnet 4.6)
  */
 
 import axios, { AxiosInstance } from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// El proxy BFF corre en el mismo origen — sin CORS, sin tokens en el cliente
+const PROXY_BASE = '/api/proxy';
 
 class ApiClient {
   private client: AxiosInstance;
-  private token: string | null = null;
 
   constructor() {
     this.client = axios.create({
-      baseURL: API_BASE_URL,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      baseURL: PROXY_BASE,
+      headers: { 'Content-Type': 'application/json' },
+      // Incluye cookies httpOnly automáticamente (mismo origen)
+      withCredentials: true,
     });
 
-    // Request interceptor: añadir token JWT
-    this.client.interceptors.request.use((config) => {
-      if (this.token) {
-        config.headers.Authorization = `Bearer ${this.token}`;
-      }
-      return config;
-    });
-
-    // Response interceptor: manejar 401
+    // Response interceptor: manejar 401 → redirigir a login
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          this.logout();
           if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+            const redirectTo = encodeURIComponent(window.location.pathname);
+            window.location.href = `/login?redirectTo=${redirectTo}`;
           }
         }
         return Promise.reject(error);
       }
     );
-
-    // Cargar token desde localStorage
-    if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('auth_token');
-    }
   }
 
   // ==========================================================================
-  // Auth
+  // Auth — llaman a las API Routes de Next.js, no al Core directamente
   // ==========================================================================
 
-  async login(username: string, password: string) {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    const { data } = await this.client.post('/auth/token', formData, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  async login(username: string, password: string): Promise<{ user: { username: string; email: string; role: string } }> {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username, password }),
     });
 
-    this.token = data.access_token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', this.token!);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw { response: { data: err, status: res.status } };
     }
 
-    return data;
+    return res.json();
   }
 
-  logout() {
-    this.token = null;
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-    }
+  async logout(): Promise<void> {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
   }
 
-  setToken(token: string) {
-    this.token = token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', token);
-    }
-  }
-
-  isAuthenticated(): boolean {
-    return !!this.token;
-  }
-
-  async getCurrentUser() {
-    const { data } = await this.client.get('/auth/me');
-    return data;
+  async getCurrentUser(): Promise<{ username: string; email: string; role: string }> {
+    const res = await fetch('/api/auth/me', { credentials: 'include' });
+    if (!res.ok) throw new Error('No autenticado');
+    return res.json();
   }
 
   // ==========================================================================
@@ -100,7 +82,7 @@ class ApiClient {
 
   async listCrews() {
     const { data } = await this.client.get('/crews/');
-    return data.crews;
+    return data;
   }
 
   async getCrewDetails(crewName: string) {
@@ -108,7 +90,7 @@ class ApiClient {
     return data;
   }
 
-  async executeCrew(crewName: string, inputs: Record<string, any>) {
+  async executeCrew(crewName: string, inputs: Record<string, string>) {
     const { data } = await this.client.post(`/crews/${crewName}/execute`, { inputs });
     return data;
   }
@@ -127,8 +109,14 @@ class ApiClient {
     return data;
   }
 
+  /** URL del stream SSE de logs — mismo origen (BFF proxy), cookies auto-incluidas */
   getJobLogsUrl(jobId: string): string {
-    return `${API_BASE_URL}/jobs/${jobId}/logs`;
+    return `/api/proxy/jobs/${jobId}/logs`;
+  }
+
+  /** URL del stream SSE de todos los jobs activos */
+  getJobsStreamUrl(): string {
+    return `/api/proxy/jobs/stream`;
   }
 
   // ==========================================================================

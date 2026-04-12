@@ -1,60 +1,46 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { PlusCircle, Briefcase, Users, TrendingUp, ArrowRight, Activity } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
-import { useAuthStore } from '@/lib/stores/auth.store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useJobsStream } from '@/hooks/useJobsStream';
 import AppShell from '@/components/layout/AppShell';
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
   Badge, Button, Spinner, Alert
 } from '@/components/ui';
 import { formatDate, formatPercent } from '@/lib/utils';
-
-const statusVariant: Record<string, any> = {
-  activo: 'success',
-  en_progreso: 'warning',
-  completado: 'info',
-  requiere_accion: 'danger',
-};
-
-const statusLabel: Record<string, string> = {
-  activo: 'Activo',
-  en_progreso: 'En progreso',
-  completado: 'Completado',
-  requiere_accion: 'Requiere acción',
-};
+import type { Job, Client, MetricsOverview, ClientsResponse, JobsResponse } from '@/lib/types';
+import { CLIENT_STATUS_MAP } from '@/lib/types';
 
 export default function DashboardPage() {
-  const { user, loadUser } = useAuthStore();
+  const user = useCurrentUser();
+  // Stream SSE para actualizaciones de jobs en tiempo real
+  useJobsStream();
 
-  useEffect(() => {
-    if (!user) loadUser();
-  }, [user, loadUser]);
-
-  const { data: clientsData, isLoading: loadingClients, error: clientsError } = useQuery({
+  const { data: clientsData, isLoading: loadingClients, error: clientsError } = useQuery<ClientsResponse>({
     queryKey: ['clients'],
-    queryFn: () => apiClient.listClients(),
+    queryFn: () => apiClient.listClients() as Promise<ClientsResponse>,
     refetchInterval: 60_000,
   });
 
-  const { data: jobsData, isLoading: loadingJobs } = useQuery({
+  const { data: jobsData, isLoading: loadingJobs } = useQuery<JobsResponse>({
     queryKey: ['jobs'],
-    queryFn: () => apiClient.listJobs(),
-    refetchInterval: 10_000,
+    queryFn: () => apiClient.listJobs() as Promise<JobsResponse>,
+    refetchInterval: 30_000, // SSE hace el trabajo; polling como fallback
   });
 
-  const { data: metricsData } = useQuery({
+  const { data: metricsData } = useQuery<MetricsOverview>({
     queryKey: ['metrics'],
-    queryFn: () => apiClient.getMetricsOverview(24),
+    queryFn: () => apiClient.getMetricsOverview(24) as Promise<MetricsOverview>,
     refetchInterval: 30_000,
   });
 
-  const clients = clientsData?.clients || [];
-  const jobs = jobsData?.jobs || [];
-  const runningJobs = jobs.filter((j: any) => j.status === 'running');
+  const clients: Client[] = clientsData?.clients ?? [];
+  const jobs: Job[] = jobsData?.jobs ?? [];
+  const runningJobs = jobs.filter((j) => j.status === 'running');
 
   return (
     <AppShell title="Dashboard">
@@ -139,7 +125,7 @@ export default function DashboardPage() {
               <p className="py-6 text-center text-sm text-gray-400">Sin clientes todavía</p>
             )}
             <div className="space-y-3">
-              {clients.slice(0, 4).map((client: any) => (
+              {clients.slice(0, 4).map((client: Client) => (
                 <div
                   key={client.slug}
                   className="flex items-center justify-between rounded-lg border border-gray-100 p-3 hover:bg-gray-50"
@@ -151,8 +137,8 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={statusVariant[client.estado] || 'default'}>
-                      {statusLabel[client.estado] || client.estado}
+                    <Badge variant={CLIENT_STATUS_MAP[client.estado]?.variant || 'default'}>
+                      {CLIENT_STATUS_MAP[client.estado]?.label || client.estado}
                     </Badge>
                     <Link href={`/projects/${client.slug}`}>
                       <ArrowRight className="h-4 w-4 text-gray-400 hover:text-indigo-600" />
@@ -185,7 +171,7 @@ export default function DashboardPage() {
               <p className="py-6 text-center text-sm text-gray-400">Sin jobs recientes</p>
             )}
             <div className="space-y-3">
-              {jobs.slice(0, 4).map((job: any) => (
+              {jobs.slice(0, 4).map((job: Job) => (
                 <div
                   key={job.job_id}
                   className="flex items-center justify-between rounded-lg border border-gray-100 p-3 hover:bg-gray-50"

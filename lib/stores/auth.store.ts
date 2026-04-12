@@ -1,6 +1,12 @@
 /**
  * lib/stores/auth.store.ts
  * Zustand store para autenticación y estado de usuario.
+ *
+ * SEGURIDAD: El token JWT vive exclusivamente en una cookie httpOnly
+ * gestionada por el BFF (/api/auth/*). Este store solo persiste
+ * información NO sensible del usuario (username, email, role).
+ *
+ * Autor: GitHub Copilot (Claude Sonnet 4.6)
  */
 
 import { create } from 'zustand';
@@ -15,46 +21,39 @@ export interface User {
 
 interface AuthState {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
-      token: null,
       isLoading: false,
       error: null,
 
       login: async (username: string, password: string) => {
         set({ isLoading: true, error: null });
         try {
-          const data = await apiClient.login(username, password);
-          // Escribir cookie que lee el middleware
-          document.cookie = `synaptolabs-token=${data.access_token}; path=/; samesite=strict; max-age=3600`;
-          set({ token: data.access_token, isLoading: false });
-          await get().loadUser();
-        } catch (err: any) {
+          // El BFF gestiona la cookie httpOnly — aquí solo recibimos el user
+          const { user } = await apiClient.login(username, password);
+          set({ user, isLoading: false });
+        } catch (err: unknown) {
           const message =
-            err?.response?.data?.detail ||
-            err?.message ||
-            'Error al iniciar sesión';
-          set({ isLoading: false, error: message, token: null, user: null });
+            (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+            (err instanceof Error ? err.message : 'Error al iniciar sesión');
+          set({ isLoading: false, error: message, user: null });
           throw err;
         }
       },
 
-      logout: () => {
-        apiClient.logout();
-        // Eliminar cookie de middleware
-        document.cookie = 'synaptolabs-token=; path=/; max-age=0';
-        set({ user: null, token: null, error: null });
+      logout: async () => {
+        await apiClient.logout();
+        set({ user: null, error: null });
       },
 
       loadUser: async () => {
@@ -62,25 +61,21 @@ export const useAuthStore = create<AuthState>()(
           const user = await apiClient.getCurrentUser();
           set({ user });
         } catch {
-          set({ user: null, token: null });
+          set({ user: null });
         }
       },
 
       clearError: () => set({ error: null }),
     }),
     {
-      name: 'synaptolabs-auth',
-      partialize: (state) => ({ token: state.token }),
-      onRehydrateStorage: () => (state) => {
-        if (state?.token) {
-          // Restaurar token en el cliente API
-          apiClient.setToken(state.token);
-        }
-      },
+      name: 'synaptolabs-user',
+      // Solo persiste info no sensible — el token está en cookie httpOnly
+      partialize: (state) => ({ user: state.user }),
     }
   )
 );
 
-export const isAdmin = (user: User | null) => user?.role === 'admin';
-export const isOperatorOrAbove = (user: User | null) =>
+export const isAdmin = (user: User | null): boolean => user?.role === 'admin';
+export const isOperatorOrAbove = (user: User | null): boolean =>
   user?.role === 'admin' || user?.role === 'operator';
+
